@@ -53,8 +53,11 @@ export async function POST(request: Request) {
     const assistantId = process.env.OPENAI_BUSINESS_SCORE_ASSISTANT_ID
     if (!assistantId) {
       console.error("[Business Score API] OpenAI Business Score Assistant ID is not set in environment variables")
+      console.error("[Business Score API] Available env vars:", Object.keys(process.env).filter(key => key.includes('OPENAI')))
       return NextResponse.json({ error: "OpenAI Assistant ID not configured" }, { status: 500 })
     }
+
+    console.log(`[Business Score API] Using OpenAI Assistant ID: ${assistantId.substring(0, 10)}...`)
 
     try {
       // Create a thread
@@ -65,7 +68,7 @@ export async function POST(request: Request) {
       console.log("[Business Score API] Adding message to thread...")
       await openai.beta.threads.messages.create(thread.id, {
         role: "user",
-        content: `Analyze this business listing and return the analysis in json: ${contentToAnalyze}`
+        content: `Analyze this business listing and return the analysis in JSON. Return ONLY a JSON object with no additional text. Do not include any explanations, introductions or any text outside the JSON structure. Your response should be valid JSON that can be directly parsed: ${contentToAnalyze}`
       })
 
       // Run the assistant
@@ -123,10 +126,48 @@ export async function POST(request: Request) {
       if (!jsonContent) {
         throw new Error("No text content found in assistant message")
       }
+      
+      // Log first 50 characters of response to help debug
+      console.log(`[Business Score API] Received response (first 50 chars): "${jsonContent.substring(0, 50)}..."`)
+
+      // Try to extract JSON from the response if it's not already JSON
+      let extractedJsonContent = jsonContent
+      
+      // If the content doesn't start with '{', try to find the first '{' and extract from there
+      if (!jsonContent.trim().startsWith('{') && !jsonContent.trim().startsWith('[')) {
+        console.log("[Business Score API] Response doesn't appear to be JSON format, trying to extract JSON")
+        const jsonStartIdx = jsonContent.indexOf('{')
+        if (jsonStartIdx >= 0) {
+          const possibleJson = jsonContent.substring(jsonStartIdx)
+          // Try to find matching closing brace
+          let braceCount = 0
+          let endIdx = 0
+          
+          for (let i = 0; i < possibleJson.length; i++) {
+            if (possibleJson[i] === '{') braceCount++
+            if (possibleJson[i] === '}') braceCount--
+            
+            if (braceCount === 0 && i > 0) {
+              endIdx = i + 1
+              break
+            }
+          }
+          
+          if (endIdx > 0) {
+            extractedJsonContent = possibleJson.substring(0, endIdx)
+            console.log("[Business Score API] Extracted JSON-like content:", extractedJsonContent.substring(0, 50) + "...")
+          }
+        }
+      }
 
       // Parse and validate the JSON response
       try {
-        const parsedJson = JSON.parse(jsonContent)
+        // Replace unicode fancy quotes with regular quotes that can be parsed
+        extractedJsonContent = extractedJsonContent
+          .replace(/[\u2018\u2019]/g, "'")
+          .replace(/[\u201C\u201D]/g, '"')
+        
+        const parsedJson = JSON.parse(extractedJsonContent)
         
         // Store the business score analysis in Vercel KV
         await kv.hset(`analysis:${id}`, {
