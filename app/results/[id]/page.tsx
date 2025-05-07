@@ -7,7 +7,7 @@ import Link from "next/link"
 import BackgroundPaths from "@/components/kokonutui/background-paths"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import Dashboard from "@/components/dashboard/dashboard"
+import { JsonDisplay } from "@/components/json-display"
 
 interface ScrapeResponse {
   url: string;
@@ -51,7 +51,7 @@ export default function ResultsPage() {
         <div className="flex justify-center items-center min-h-[50vh]">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-gray-900 mx-auto mb-4"></div>
-            <p className="text-lg">Loading business data...</p>
+            <p className="text-lg">Loading scraped content...</p>
           </div>
         </div>
       </BackgroundPaths>
@@ -76,13 +76,37 @@ export default function ResultsPage() {
     )
   }
 
+  // Extract the JSON content from the scrape result
+  const jsonContent = scrapeData.json || {}
+
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      <Dashboard listingId={id as string} scrapeData={scrapeData} />
-    </motion.div>
+    <BackgroundPaths title="Scraping Results" subtle={true}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-full max-w-4xl mx-auto"
+      >
+        <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-green-500 dark:from-blue-400 dark:to-green-400">
+            Business Listing
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            <Link href="/">
+              <Button variant="outline" size="sm">
+                Back to Home
+              </Button>
+            </Link>
+            <Link href={`/analyze/${id}`}>
+              <Button size="sm">Analyze</Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="bg-blue-50/70 dark:bg-blue-900/20 backdrop-blur-md border border-blue-100/50 dark:border-blue-700/30 rounded-xl shadow-lg p-4 md:p-6">
+          <JsonDisplay content={jsonContent} initialMaxHeight={400} />
+        </div>
+      </motion.div>
+    </BackgroundPaths>
   )
 }
