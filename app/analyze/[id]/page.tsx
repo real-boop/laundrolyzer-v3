@@ -34,8 +34,8 @@ export default function AnalyzePage() {
         
         if (analysisResponse.ok) {
           const analysisData = await analysisResponse.json()
-          if (analysisData.businessAnalysis) {
-            setBusinessAnalysis(analysisData.businessAnalysis)
+          if (analysisData.businessScoreData) {
+            setBusinessAnalysis(analysisData.businessScoreData)
             setIsLoadingBusiness(false)
             return
           }
@@ -51,38 +51,49 @@ export default function AnalyzePage() {
         const scrapeData = await scrapeResponse.json()
         setScrapeData(scrapeData)
         
-        // Start business analysis process
+        // Start business score analysis
         setIsAnalyzingBusiness(true)
-        const analyzeResponse = await fetch("/api/analyze", {
+        const businessScoreResponse = await fetch("/api/business-score", {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id }),
         })
         
-        if (!analyzeResponse.ok) {
-          const errorData = await analyzeResponse.json()
-          throw new Error(errorData.error || "Business analysis failed")
+        if (!businessScoreResponse.ok) {
+          const errorData = await businessScoreResponse.json()
+          throw new Error(errorData.error || "Business score analysis failed")
         }
         
         // Get immediate response if available
-        const analyzeData = await analyzeResponse.json()
-        if (analyzeData.businessAnalysis) {
-          setBusinessAnalysis(analyzeData.businessAnalysis)
+        const businessScoreData = await businessScoreResponse.json()
+        if (businessScoreData.businessScoreData) {
+          setBusinessAnalysis(businessScoreData.businessScoreData)
           setIsAnalyzingBusiness(false)
           setIsLoadingBusiness(false)
+          
+          // Also trigger recommendation analysis after business score is complete
+          // This ensures both OpenAI assistants are called
+          console.log("Triggering recommendation analysis after business score completion")
+          fetch("/api/recommendation", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id }),
+          }).catch(err => {
+            console.error("Failed to trigger recommendation analysis:", err)
+            // Non-blocking - we don't need to wait for this to complete
+          })
+          
           return
         }
         
-        // Poll for business analysis results
+        // Poll for business score results
         let attempts = 0
         const maxAttempts = 30
         const pollInterval = 2000 // 2 seconds
         
-        const pollForBusinessResults = async () => {
+        const pollForResults = async () => {
           if (attempts >= maxAttempts) {
-            throw new Error("Business analysis timed out")
+            throw new Error("Business score analysis timed out")
           }
           
           attempts++
@@ -91,26 +102,39 @@ export default function AnalyzePage() {
           
           if (pollResponse.ok) {
             const analysisData = await pollResponse.json()
-            if (analysisData.businessAnalysis) {
-              setBusinessAnalysis(analysisData.businessAnalysis)
+            if (analysisData.businessScoreData) {
+              setBusinessAnalysis(analysisData.businessScoreData)
               setIsAnalyzingBusiness(false)
               setIsLoadingBusiness(false)
+              
+              // Also trigger recommendation analysis after polling finds results
+              // This ensures both OpenAI assistants are called
+              console.log("Triggering recommendation analysis after polling found business score")
+              fetch("/api/recommendation", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id }),
+              }).catch(err => {
+                console.error("Failed to trigger recommendation analysis:", err)
+                // Non-blocking - we don't need to wait for this to complete
+              })
+              
               return
             }
           }
           
           if (attempts < maxAttempts) {
             // Continue polling
-            setTimeout(pollForBusinessResults, pollInterval)
+            setTimeout(pollForResults, pollInterval)
           } else {
-            throw new Error("Failed to retrieve business analysis results")
+            throw new Error("Failed to retrieve business score results")
           }
         }
         
         // Start polling
-        setTimeout(pollForBusinessResults, pollInterval)
+        setTimeout(pollForResults, pollInterval)
       } catch (err) {
-        console.error("Business Analysis Error:", err)
+        console.error("Business Score Error:", err)
         setBusinessError(err instanceof Error ? err.message : "An unknown error occurred")
         setIsAnalyzingBusiness(false)
         setIsLoadingBusiness(false)
@@ -308,11 +332,12 @@ export default function AnalyzePage() {
         const markdownElement = document.querySelector('.markdown-display-demographics')
         if (markdownElement) {
           // Use clone of content to avoid modifying the original DOM
-          const clonedContent = markdownElement.cloneNode(true);
+          const clonedContent = markdownElement.cloneNode(true) as HTMLElement;
           
           // Remove gradient styling from any headings in demographics
           const headings = clonedContent.querySelectorAll('h1, h2, h3, h4, h5, h6');
-          headings.forEach(heading => {
+          headings.forEach((element) => {
+            const heading = element as HTMLElement;
             heading.style.color = '#000';
             heading.style.background = 'none';
             heading.style.backgroundImage = 'none';
