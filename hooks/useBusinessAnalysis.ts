@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { BusinessAnalysis } from '@/types/dashboard';
-import { adaptToBusinessAnalysis } from '@/lib/dashboard-adapter';
 
 /**
  * Custom hook to fetch business analysis data
@@ -17,46 +16,27 @@ export function useBusinessAnalysis(listingId: string) {
       try {
         setIsLoading(true);
         
-        // Use mock data if in development and NEXT_PUBLIC_USE_MOCK_DATA is true
-        if (process.env.NEXT_PUBLIC_USE_MOCK_DATA === 'true') {
-          console.log('Using mock business analysis data');
-          
-          // Get the scrape data to pass through the adapter
-          const scrapeResponse = await fetch(`/api/get-scrape?id=${listingId}`);
-          
-          if (!scrapeResponse.ok) {
-            throw new Error('Failed to fetch scrape data');
-          }
-          
-          const scrapeData = await scrapeResponse.json();
-          
-          // Transform the scraped data using the adapter with mock data fallback
-          const businessAnalysis = adaptToBusinessAnalysis(scrapeData, listingId);
-          
-          setAnalysis(businessAnalysis);
-        } else {
-          // Call the new business-score API
-          const response = await fetch('/api/business-score', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ id: listingId }),
-          });
-          
-          if (!response.ok) {
-            throw new Error('Failed to fetch business score data');
-          }
-          
-          const data = await response.json();
-          
-          if (data.error) {
-            throw new Error(data.error);
-          }
-          
-          // Set the analysis from the API response
-          setAnalysis(data.businessScoreData);
+        // Call the business-score API
+        const response = await fetch('/api/business-score', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: listingId }),
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch business score data');
         }
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        
+        // Set the analysis from the API response
+        setAnalysis(data.businessScoreData);
       } catch (err) {
         console.error('Error fetching business analysis:', err);
         setError(err instanceof Error ? err : new Error('Unknown error'));
