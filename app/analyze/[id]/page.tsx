@@ -18,8 +18,15 @@ export default function AnalyzePage() {
         if (!scrapeResponse.ok) {
           throw new Error("Failed to fetch scraped data")
         }
-        const data = await scrapeResponse.json()
-        setScrapeData(data)
+        const rawData = await scrapeResponse.json()
+        
+        // Format the data properly for the dashboard component
+        // The dashboard expects data in a specific format with json field
+        const formattedData = {
+          json: rawData.data?.json || rawData
+        }
+        
+        setScrapeData(formattedData)
         setIsLoading(false)
 
         // Trigger business score and recommendation analysis in the background
